@@ -1,24 +1,85 @@
----
-title: app.json / app.config.js
-description: A reference of available properties in Expo app config.
-maxHeadingDepth: 5
----
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Alert, SafeAreaView } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Trash2, Plus, ShoppingBag, CheckCircle } from 'lucide-react-native';
 
-import { BookOpen02Icon } from '@expo/styleguide-icons/outline/BookOpen02Icon';
+export default function App() {
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState('');
+  const [list, setList] = useState([]);
 
-import schema from '~/public/static/schemas/v54.0.0/app-config-schema.json';
-import AppConfigSchemaTable from '~/ui/components/AppConfigSchemaTable';
-import { BoxLink } from '~/ui/components/BoxLink';
+  useEffect(() => { loadData(); }, []);
 
-The following is a list of properties that are available for you under the `"expo"` key in **app.json** or **app.config.json**. These properties can be passed to the top level object of **app.config.js** or **app.config.ts**.
+  const loadData = async () => {
+    const saved = await AsyncStorage.getItem('@SwiftCart_Data');
+    if (saved) setList(JSON.parse(saved));
+  };
 
-<BoxLink
-  title="Configuration with app config"
-  description="For information on app configuration, the differences between various app config files, and how to use them dynamically."
-  href="/workflow/configuration/"
-  Icon={BookOpen02Icon}
-/>
+  const saveData = async (newList) => {
+    setList(newList);
+    await AsyncStorage.setItem('@SwiftCart_Data', JSON.stringify(newList));
+  };
 
-## Properties
+  const addItem = () => {
+    if (!name.trim()) return;
+    const emoji = name.toLowerCase().includes('leite') ? '🥛' : 
+                  name.toLowerCase().includes('pão') ? '🍞' : 
+                  name.toLowerCase().includes('carne') ? '🥩' : '📦';
+    
+    const newItem = { id: Date.now().toString(), text: name, price: parseFloat(price) || 0, emoji };
+    saveData([...list, newItem]);
+    setName(''); setPrice('');
+  };
 
-<AppConfigSchemaTable schema={schema} />
+  const total = list.reduce((acc, curr) => acc + curr.price, 0);
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* ESPAÇO PARA ANÚNCIO (ONDE VOCÊ GANHA DINHEIRO) */}
+      <View style={styles.adSpace}><Text style={styles.adText}>Anúncio Google AdMob</Text></View>
+
+      <View style={styles.bagHeader}>
+        <Text style={styles.title}>Minha Sacola 🛍️</Text>
+        <Text style={styles.totalText}>R$ {total.toFixed(2)}</Text>
+      </View>
+
+      <FlatList
+        data={list}
+        keyExtractor={item => item.id}
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <Text style={styles.emoji}>{item.emoji}</Text>
+            <Text style={styles.itemText}>{item.text}</Text>
+            <Text style={styles.priceText}>R$ {item.price.toFixed(2)}</Text>
+            <TouchableOpacity onPress={() => saveData(list.filter(i => i.id !== item.id))}>
+              <Trash2 color="#7F5539" size={20} />
+            </TouchableOpacity>
+          </View>
+        )}
+      />
+
+      <View style={styles.footer}>
+        <TextInput style={styles.input} placeholder="Item" value={name} onChangeText={setName} />
+        <TextInput style={styles.inputSmall} placeholder="R$" keyboardType="numeric" value={price} onChangeText={setPrice} />
+        <TouchableOpacity style={styles.addBtn} onPress={addItem}><Plus color="white" /></TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F5F5DC' },
+  adSpace: { height: 50, backgroundColor: '#ddd', justifyContent: 'center', alignItems: 'center' },
+  adText: { fontSize: 10, color: '#666' },
+  bagHeader: { backgroundColor: '#E6CCB2', padding: 25, borderBottomWidth: 5, borderBottomColor: '#B08968' },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#432818' },
+  totalText: { fontSize: 22, color: '#7F5539', fontWeight: 'bold' },
+  card: { flexDirection: 'row', padding: 15, backgroundColor: '#EDE0D4', margin: 10, borderRadius: 10, alignItems: 'center' },
+  emoji: { fontSize: 24, marginRight: 10 },
+  itemText: { flex: 1, color: '#432818', fontWeight: 'bold' },
+  priceText: { marginRight: 15, color: '#7F5539' },
+  footer: { flexDirection: 'row', padding: 20, gap: 10, backgroundColor: '#F5F5DC' },
+  input: { flex: 2, backgroundColor: 'white', padding: 12, borderRadius: 10 },
+  inputSmall: { flex: 1, backgroundColor: 'white', padding: 12, borderRadius: 10 },
+  addBtn: { backgroundColor: '#7F5539', padding: 15, borderRadius: 10 }
+});
