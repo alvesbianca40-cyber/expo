@@ -1,74 +1,158 @@
----
-sidebar_title: Deployments and aliases
-title: Assign aliases and promote to production
-description: Learn about deployment URLs and how to set up aliases.
----
+import React, { useState, useEffect } from 'react';
+import { 
+  StyleSheet, Text, View, TextInput, TouchableOpacity, 
+  FlatList, KeyboardAvoidingView, Platform, ScrollView, Alert
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Trash2, Plus, ShoppingBag, History, CheckCircle2 } from 'lucide-react-native';
 
-import { Terminal } from '~/ui/components/Snippet';
+export default function App() {
+  const [tab, setTab] = useState('current');
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState('');
+  const [list, setList] = useState([]);
+  const [history, setHistory] = useState([]);
 
-## Deployments
+  useEffect(() => { loadData(); }, []);
 
-Deployments to EAS Hosting are immutable. Each deployment is accessible via a unique deployment URL consisting of the preview subdomain name and the deployment ID.
+  const loadData = async () => {
+    const savedList = await AsyncStorage.getItem('@list_v4');
+    const savedHistory = await AsyncStorage.getItem('@history_v4');
+    if (savedList) setList(JSON.parse(savedList));
+    if (savedHistory) setHistory(JSON.parse(savedHistory));
+  };
 
-### Preview subdomain name
+  const saveData = async (newList, newHistory) => {
+    setList(newList);
+    setHistory(newHistory);
+    await AsyncStorage.setItem('@list_v4', JSON.stringify(newList));
+    await AsyncStorage.setItem('@history_v4', JSON.stringify(newHistory));
+  };
 
-To activate EAS Hosting for a project, you'll need to choose a **preview subdomain name**. You can do this via the **Hosting** section of your project on the [expo.dev](http://expo.dev) website. Alternatively, you'll be prompted to choose a preview subdomain when you create your first deployment using the EAS CLI.
+  // Função para adicionar emoji automático baseado no nome
+  const getEmoji = (text) => {
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes('leite')) return '🥛';
+    if (lowerText.includes('pão') || lowerText.includes('pao')) return '🍞';
+    if (lowerText.includes('carne') || lowerText.includes('frango')) return '🥩';
+    if (lowerText.includes('maçã') || lowerText.includes('maca') || lowerText.includes('fruta')) return '🍎';
+    if (lowerText.includes('cerveja') || lowerText.includes('vinho')) return '🍺';
+    if (lowerText.includes('limpeza') || lowerText.includes('sabão')) return '🧼';
+    if (lowerText.includes('café')) return '☕';
+    return '📦'; // Ícone padrão de pacote
+  };
 
-### Preview and production URLs
+  const addItem = () => {
+    if (!name.trim()) return;
+    const newItem = { 
+      id: Date.now().toString(), 
+      text: name, 
+      emoji: getEmoji(name),
+      price: parseFloat(price.replace(',', '.')) || 0,
+      bought: false 
+    };
+    saveData([...list, newItem], history);
+    setName(''); setPrice('');
+  };
 
-A **preview subdomain name** is a prefix used for the preview URL of your app. For example, if you choose `my-app` as the preview subdomain name, your preview URL would be: `https://my-app--or1170q9ix.expo.app/`, and your production URL would be: `https://my-app.expo.app/`.
+  const finishPurchase = () => {
+    if (list.length === 0) return;
+    const total = list.reduce((acc, curr) => acc + curr.price, 0);
+    const newEntry = { id: Date.now().toString(), date: new Date().toLocaleDateString('pt-BR'), total: total, itemsCount: list.length };
+    Alert.alert("Compra Finalizada", `R$ ${total.toFixed(2)} guardado no histórico!`);
+    saveData([], [newEntry, ...history]);
+    setTab('history');
+  };
 
-### Deployment ID
+  const totalCurrent = list.reduce((acc, curr) => acc + curr.price, 0);
 
-Each deployment is identifiable using a unique deployment ID. This ID can be customized but will be a random string of letters and numbers by default.
+  return (
+    <View style={styles.container}>
+      {/* Tab Navigation */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity onPress={() => setTab('current')} style={[styles.tab, tab === 'current' && styles.activeTab]}>
+          <Text style={[styles.tabText, tab === 'current' && styles.activeTabText]}>Lista</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setTab('history')} style={[styles.tab, tab === 'history' && styles.activeTab]}>
+          <Text style={[styles.tabText, tab === 'history' && styles.activeTabText]}>Histórico</Text>
+        </TouchableOpacity>
+      </View>
 
-Deployments are immutable. Once they are deployed, they cannot be changed and will always remain accessible and identifiable using their deployment ID.
+      {tab === 'current' ? (
+        <>
+          <View style={styles.bagHeader}>
+            <View style={styles.bagTop} />
+            <Text style={styles.title}>Minha Sacola</Text>
+            <Text style={styles.bagTotal}>Total: R$ {totalCurrent.toFixed(2)}</Text>
+          </View>
 
-## Aliases
+          <FlatList
+            data={list}
+            style={styles.list}
+            renderItem={({ item }) => (
+              <View style={styles.card}>
+                <Text style={styles.emoji}>{item.emoji}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemText}>{item.text}</Text>
+                  <Text style={styles.priceTag}>R$ {item.price.toFixed(2)}</Text>
+                </View>
+                <TouchableOpacity onPress={() => saveData(list.filter(i => i.id !== item.id), history)}>
+                  <Trash2 color="#7F5539" size={18} />
+                </TouchableOpacity>
+              </View>
+            )}
+          />
 
-Aliases are user-defined values used for creating custom URLs for deployments.
+          <TouchableOpacity style={styles.finishBtn} onPress={finishPurchase}>
+            <CheckCircle2 color="white" size={20} />
+            <Text style={styles.finishBtnText}>Finalizar Compra</Text>
+          </TouchableOpacity>
 
-To make a deployment and assign it to an alias, use the `--alias` option:
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inputArea}>
+            <TextInput style={[styles.input, { flex: 2 }]} placeholder="Ex: Leite" value={name} onChangeText={setName} />
+            <TextInput style={[styles.input, { flex: 1 }]} placeholder="R$" keyboardType="numeric" value={price} onChangeText={setPrice} />
+            <TouchableOpacity style={styles.addBtn} onPress={addItem}><Plus color="white" size={24} /></TouchableOpacity>
+          </KeyboardAvoidingView>
+        </>
+      ) : (
+        <ScrollView style={styles.list}>
+          <Text style={styles.title}>Histórico</Text>
+          {history.map(item => (
+            <View key={item.id} style={styles.historyCard}>
+              <View>
+                <Text style={styles.historyDate}>{item.date}</Text>
+                <Text style={styles.historySub}>{item.itemsCount} produtos</Text>
+              </View>
+              <Text style={styles.historyTotal}>R$ {item.total.toFixed(2)}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
 
-<Terminal cmd={['$ eas deploy --alias hello']} />
-
-The above command will create a deployment with both a standard URL at `https://my-app--or1170q9ix.expo.app/` and an alias at `https://my-app--hello.expo.app/`.
-
-> Aliases are unique per project. If you choose an alias that was already in use, it will get re-assigned to the new deployment.
-
-A single deployment can have multiple aliases. Aliases can also be assigned to an existing deployment by using the `--id` option:
-
-<Terminal cmd={['$ eas deploy:alias --id=my-id']} />
-
-In the above command, the `my-id` is the ID in the preview URL.
-
-Aliases can have arbitrary names. For example, if you want to create a staging environment, you may create an alias called `staging` and assign a deployment to it.
-
-### Production alias
-
-If your preview subdomain name is `my-app`, your production URL will be `https://my-app.expo.app/`.
-
-Similar to other aliases, a deployment can be promoted to production using `--prod` option:
-
-<Terminal cmd={['$ eas deploy --prod']} />
-
-Existing deployment can also be promoted to production using its deployment ID with the `--id` option:
-
-<Terminal cmd={['$ eas deploy:alias --prod --id=deploymentId']} />
-
-## Terminology
-
-In the following example, `my-app` is selected as the preview subdomain name:
-
-- `https://my-app--or1170q9ix.expo.app/` : Preview URL, which is unique and where your deployment is available.
-  - `my-app`: Preview subdomain name. Globally unique prefix tied to your project.
-  - `or1170q9ix`: Deployment ID, which is unique to this deployment.
-- `https://my-app--hello.expo.app/`: A deployment URL with an alias.
-  - `hello`: User-defined alias.
-- `https://my-app.expo.app/`: Production deployment URL.
-
-## Common questions
-
-### Does EAS Hosting provide dedicated IP addresses?
-
-No, EAS Hosting uses **SNI (Server Name Indication)**, which means that IP addresses are shared and are not dedicated to a single project.
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F5F5DC', paddingHorizontal: 20, paddingTop: 50 },
+  tabBar: { flexDirection: 'row', marginBottom: 20, backgroundColor: '#E6CCB2', borderRadius: 25, padding: 4 },
+  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 20 },
+  activeTab: { backgroundColor: '#7F5539' },
+  tabText: { color: '#7F5539', fontWeight: 'bold' },
+  activeTabText: { color: 'white' },
+  bagHeader: { backgroundColor: '#E6CCB2', padding: 20, borderRadius: 15, borderTopWidth: 8, borderTopColor: '#B08968', marginBottom: 15 },
+  title: { fontSize: 22, fontWeight: 'bold', color: '#432818' },
+  bagTotal: { fontSize: 18, color: '#7F5539', fontWeight: '600' },
+  list: { flex: 1 },
+  card: { backgroundColor: '#EDE0D4', padding: 15, borderRadius: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 10, borderBottomWidth: 2, borderBottomColor: '#DDB892' },
+  emoji: { fontSize: 24, marginRight: 15 },
+  itemText: { color: '#432818', fontSize: 16, fontWeight: 'bold' },
+  priceTag: { color: '#9C6644', fontSize: 14 },
+  inputArea: { flexDirection: 'row', gap: 10, paddingVertical: 20 },
+  input: { backgroundColor: '#EDE0D4', padding: 12, borderRadius: 10, color: '#432818' },
+  addBtn: { backgroundColor: '#7F5539', padding: 12, borderRadius: 10, justifyContent: 'center' },
+  finishBtn: { backgroundColor: '#432818', flexDirection: 'row', padding: 15, borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 10 },
+  finishBtnText: { color: 'white', fontWeight: 'bold' },
+  historyCard: { padding: 15, backgroundColor: '#E6CCB2', borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  historyDate: { fontWeight: 'bold', color: '#432818' },
+  historyTotal: { color: '#7F5539', fontWeight: 'bold' }
+});
